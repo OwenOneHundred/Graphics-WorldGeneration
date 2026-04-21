@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>World Generation</title>
+    <script type="importmap">
+        {
+            "imports": {
+            "three": "https://unpkg.com/three@0.169.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.169.0/examples/jsm/",
+            "lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm"
+            }
+        }
+    </script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; }
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 14px;
+            border-radius: 10px;
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 13px;
+            min-width: 240px;
+        }
+        #controls h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            border-bottom: 1px solid #555;
+            padding-bottom: 6px;
+        }
+        #controls button {
+            background: #444;
+            color: white;
+            border: 1px solid #666;
+            padding: 6px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 4px 4px 4px 0;
+        }
+        #controls button:hover { background: #666; }
+        #controls button.active { background: #2a7a2a; border-color: #4a4; }
+        #gui-container { margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<!-- ===================== UI Controls ===================== -->
+<div id="controls">
+    <h3>World Generation</h3>
+    <div>
+        Owen Kabrhel and Thai Nguyen<br>
+        Buttons go here
+    </div>
+</div>
+
+<script type="module">
+    import * as THREE from 'three';
+    import GUI from 'lil-gui';
+</script>
