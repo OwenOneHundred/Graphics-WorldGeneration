@@ -43,12 +43,22 @@
             cursor: pointer;
             margin: 4px 4px 4px 0;
         }
+        #scene-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
         #controls button:hover { background: #666; }
         #controls button.active { background: #2a7a2a; border-color: #4a4; }
         #gui-container { margin-top: 10px; }
     </style>
 </head>
 <body>
+
+<div id="scene-container"></div>
 
 <!-- ===================== UI Controls ===================== -->
 <div id="controls">
@@ -62,4 +72,253 @@
 <script type="module">
     import * as THREE from 'three';
     import GUI from 'lil-gui';
+
+    let container, scene, camera, renderer;
+
+    // ─── Initialization ────────────────────────────────────────────────
+    function init() {
+        container = document.getElementById('scene-container');
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB); // sky blue
+
+        createRenderer();
+        createCamera();
+        createLights();
+        createGround();
+
+        animate();
+    }
+
+    // ─── Renderer ──────────────────────────────────────────────────────
+    function createRenderer() {
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.outputColorSpace = THREE.SRGBColorSpace;  // correct color display
+        container.appendChild(renderer.domElement);
+    }
+
+    // ─── Camera + Controls ─────────────────────────────────────────────
+    function createCamera() {
+        const aspect = container.clientWidth / container.clientHeight;
+        camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 200);
+        camera.position.set(4, 20, 12);
+
+        camera.lookAt(0, 0, 0);
+    }
+
+    // ─── Lights ────────────────────────────────────────────────────────
+    function createLights() {
+        // Hemisphere light: bright sky + green ground bounce — makes colors vivid
+        const hemi = new THREE.HemisphereLight(0xffffff, 0x446644, 1.2);
+        scene.add(hemi);
+
+        // Bright ambient so colors aren't muddy
+        scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+    }
+
+    function createGround() {
+        const geometry = new THREE.PlaneGeometry(20, 20, 40, 40);
+
+        const material = new THREE.ShaderMaterial({
+            uniforms: {
+                u_resolution:     { value: new THREE.Vector2(1000, 1000) },
+                u_time:        { value: 1.0 },
+                u_heightNoiseScale: { value: 0.25 },
+                u_colorNoiseScale: { value: 10.0 },
+                u_colorA: { value: new THREE.Vector3(0.2, 0.878, 0.02)},
+                u_colorB: { value: new THREE.Vector3(0.478, 0.32, 0.043)}
+            },
+            vertexShader: groundVertexShader,
+            fragmentShader: groundFragmentShader,
+        });
+
+        const rectangle1 = new THREE.Mesh(geometry, material);
+
+        geometry.rotateX(-Math.PI / 2);
+
+        scene.add(rectangle1);
+    }
+
+    // language=Glsl
+    const groundVertexShader = `
+        /* glsl */
+        varying vec3 vNormal;
+        varying vec3 vViewPosition;
+
+        // ===========  NOISE  =============
+        uniform vec2 u_resolution;
+        uniform float u_colorNoiseScale;
+        uniform float u_heightNoiseScale;
+        uniform float u_time;
+
+        vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+        vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+        vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
+
+        //
+        // Description : GLSL 2D simplex noise function
+        //      Author : Ian McEwan, Ashima Arts
+        //  Maintainer : ijm
+        //     Lastmod : 20110822 (ijm)
+        //     License :
+        //  Copyright (C) 2011 Ashima Arts. All rights reserved.
+        //  Distributed under the MIT License.
+        //
+        float snoise(vec2 v) {
+            // Precompute values for skewed triangular grid
+            const vec4 C = vec4(0.211324865405187,
+            // (3.0-sqrt(3.0))/6.0
+            0.366025403784439,
+            // 0.5*(sqrt(3.0)-1.0)
+            -0.577350269189626,
+            // -1.0 + 2.0 * C.x
+            0.024390243902439);
+            // 1.0 / 41.0
+
+            // First corner (x0)
+            vec2 i  = floor(v + dot(v, C.yy));
+            vec2 x0 = v - i + dot(i, C.xx);
+
+            // Other two corners (x1, x2)
+            vec2 i1 = vec2(0.0);
+            i1 = (x0.x > x0.y)? vec2(1.0, 0.0):vec2(0.0, 1.0);
+            vec2 x1 = x0.xy + C.xx - i1;
+            vec2 x2 = x0.xy + C.zz;
+
+            i = mod289(i);
+            vec3 p = permute(
+                permute( i.y + vec3(0.0, i1.y, 1.0))
+                + i.x + vec3(0.0, i1.x, 1.0 ));
+
+            vec3 m = max(0.5 - vec3(
+            dot(x0,x0),
+            dot(x1,x1),
+            dot(x2,x2)
+            ), 0.0);
+
+            m = m*m;
+            m = m*m;
+
+            // Gradients:
+            //  41 pts uniformly over a line, mapped onto a diamond
+            //  The ring size 17*17 = 289 is close to a multiple
+            //      of 41 (41*7 = 287)
+
+            vec3 x = 2.0 * fract(p * C.www) - 1.0;
+            vec3 h = abs(x) - 0.5;
+            vec3 ox = floor(x + 0.5);
+            vec3 a0 = x - ox;
+
+            // Normalise gradients implicitly by scaling m
+            // Approximation of: m *= inversesqrt(a0*a0 + h*h);
+            m *= 1.79284291400159 - 0.85373472095314 * (a0*a0+h*h);
+
+            // Compute final noise value at P
+            vec3 g = vec3(0.0);
+            g.x  = a0.x  * x0.x  + h.x  * x0.y;
+            g.yz = a0.yz * vec2(x1.x,x2.x) + h.yz * vec2(x1.y,x2.y);
+            return 130.0 * dot(m, g);
+        }
+
+        void main() {
+            float heightNoise = snoise(position.xz * u_heightNoiseScale);
+
+            vec3 newPosition = position;
+            newPosition.y += heightNoise * 1.0;
+
+            vec4 viewPos = modelViewMatrix * vec4(newPosition, 1.0);
+            vViewPosition = viewPos.xyz;
+            vNormal = normalize(normalMatrix * normal);
+
+            gl_Position = projectionMatrix * viewPos;
+        }
+      `;
+
+    // language=Glsl
+    const testFragmentShader = `
+        uniform vec2 u_resolution;
+        uniform float u_colorNoiseScale;
+        uniform float u_heightNoiseScale;
+        uniform float u_time;
+
+        void main() {
+            gl_FragColor = vec4(0.2, 0.2, 0.2, 1.0);
+        }
+    `
+
+    // language=Glsl
+    const groundFragmentShader = `
+        /* glsl */
+        // ===========  VORONOI  =============
+        uniform vec2 u_resolution;
+        uniform float u_colorNoiseScale;
+        uniform float u_heightNoiseScale;
+        uniform float u_time;
+
+        uniform vec3 u_colorA;
+        uniform vec3 u_colorB;
+
+        vec2 random2( vec2 p ) {
+            return fract(sin(vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3))))*43758.5453);
+        }
+
+        void main() {
+            vec2 st = gl_FragCoord.xy/u_resolution.xy;
+            st.x *= u_resolution.x/u_resolution.y;
+            vec3 color = vec3(.0);
+
+            // Scale
+            st *= u_colorNoiseScale;
+
+            // Tile the space
+            vec2 i_st = floor(st);
+            vec2 f_st = fract(st);
+
+            float m_dist = 10.;  // minimum distance
+            vec2 m_point;        // minimum point
+
+            for (int j=-1; j<=1; j++ ) {
+                for (int i=-1; i<=1; i++ ) {
+                    vec2 neighbor = vec2(float(i),float(j));
+                    vec2 point = random2(i_st + neighbor);
+                    point = 0.5 + 0.5*sin(u_time + 6.2831*point);
+                    vec2 diff = neighbor + point - f_st;
+                    float dist = length(diff);
+
+                    if( dist < m_dist ) {
+                        m_dist = dist;
+                        m_point = point;
+                    }
+                }
+            }
+
+            // Assign a color using the closest point position
+            float value = dot(m_point,vec2(.3,.6));
+
+            // Add distance field to closest point center
+            // color.g = m_dist;
+
+            // Show isolines
+            //color -= abs(sin(40.0*m_dist))*0.07;
+
+            // Draw cell center
+            //color += 1.-step(.05, m_dist);
+
+            // Draw grid
+            //color.r += step(.98, f_st.x) + step(.98, f_st.y);
+
+            color = mix(u_colorA, u_colorB, value);
+
+            gl_FragColor = vec4(color,1.0);
+        }
+    `;
+
+    function animate() {
+        requestAnimationFrame(animate);
+        // animations here
+        renderer.render(scene, camera);
+    }
+
+    init();
 </script>
