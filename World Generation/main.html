@@ -86,7 +86,6 @@
     //
     // Where you should start is adding a second, differently scaled call to the snoise in the vertex shader,
     // and mapping that onto a biome. We'll pass the color and scale through to the fragment shader with varying.
-    // Biome should probably be a class.
 
     let container, scene, camera, renderer;
 
@@ -142,7 +141,7 @@
                 u_heightNoiseScale: { value: 0.25 },
                 u_colorNoiseScale: { value: 10.0 },
                 u_colorA: { value: new THREE.Vector3(0.2, 0.878, 0.02)},
-                u_colorB: { value: new THREE.Vector3(0.478, 0.32, 0.043)}
+                u_colorB: { value: new THREE.Vector3(0.275, 0.639, 0.165)}
             },
             vertexShader: groundVertexShader,
             fragmentShader: groundFragmentShader,
