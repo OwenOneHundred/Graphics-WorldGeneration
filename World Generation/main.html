@@ -73,6 +73,21 @@
     import * as THREE from 'three';
     import GUI from 'lil-gui';
 
+    // WHAT TO DO
+    // Right now, the noise and voronoi are only one layer each and thus the entire area is one "biome."
+    //
+    // We need to define different height map and color mix variations for several biomes.
+    // Then we use a second layer of noise (if we want smooth transitions but more computation) or voronoi (sharp edges but fast)
+    // and map the output of that layer to one of our biomes.
+    //
+    // Noise outputs a 0-1 value so we would make 0.2 to 0.3 jungle for example.
+    // Then, we would pass in the "jungle" scale and colors to the first layer of noise we already have
+    // That would make a spread of customizable biomes.
+    //
+    // Where you should start is adding a second, differently scaled call to the snoise in the vertex shader,
+    // and mapping that onto a biome. We'll pass the color and scale through to the fragment shader with varying.
+    // Biome should probably be a class.
+
     let container, scene, camera, renderer;
 
     // ─── Initialization ────────────────────────────────────────────────
