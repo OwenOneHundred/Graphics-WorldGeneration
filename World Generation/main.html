@@ -146,7 +146,8 @@
                 u_heightNoiseScale: { value: 0.25 },
                 u_colorNoiseScale: { value: 10.0 },
                 u_colorA: { value: new THREE.Vector3(0.2, 0.878, 0.02)},
-                u_colorB: { value: new THREE.Vector3(0.275, 0.639, 0.165)}
+                u_colorB: { value: new THREE.Vector3(0.275, 0.639, 0.165)},
+                uBiomes: { value: biomes }
             },
             vertexShader: groundVertexShader,
             //fragmentShader: groundFragmentShader,
@@ -158,6 +159,14 @@
 
         scene.add(rectangle1);
     }
+    const biomes = [
+        { colorA: new THREE.Color(0x228b22), colorB: new THREE.Color(0x156315), lowestHeight: 0, highestHeight: 1 },
+        { colorA: new THREE.Color(0x228b22), colorB: new THREE.Color(0x156315), lowestHeight: 0, highestHeight: 1 },
+        { colorA: new THREE.Color(0x228b22), colorB: new THREE.Color(0x156315), lowestHeight: 0, highestHeight: 1 },
+        { colorA: new THREE.Color(0x228b22), colorB: new THREE.Color(0x156315), lowestHeight: 0, highestHeight: 1 },
+        { colorA: new THREE.Color(0x228b22), colorB: new THREE.Color(0x156315), lowestHeight: 0, highestHeight: 1 },
+    ];
+
 
     function createSun() {
         const geometry = new THREE.SphereGeometry(1, 32, 32);
@@ -180,10 +189,19 @@
         const moonLight = new THREE.PointLight(0xcccccc, 0.5, 100);
         moon.add(moonLight);
     }
-
+    
     // language=Glsl
     const groundVertexShader = `
         /* glsl */
+        struct Biome {
+            vec3 colorA;
+            vec3 colorB;
+            float lowestHeight;
+            float highestHeight;
+        };
+
+        uniform Biome uBiomes[5];
+
         varying vec3 vNormal;
         varying vec3 vViewPosition;
 
@@ -291,6 +309,15 @@
     // language=Glsl
     const groundFragmentShader = `
         /* glsl */
+        struct Biome {
+            vec3 colorA;
+            vec3 colorB;
+            float lowestHeight;
+            float highestHeight;
+        };
+
+        uniform Biome uBiomes[5];
+
         // ===========  VORONOI  =============
         uniform vec2 u_resolution;
         uniform float u_colorNoiseScale;
