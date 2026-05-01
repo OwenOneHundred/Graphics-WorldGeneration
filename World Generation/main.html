@@ -64,7 +64,7 @@
 <div id="controls">
     <h3>World Generation</h3>
     <div>
-        Owen Kabrhel and Thai Nguyen<br>
+        Owen Kabrhel and Thai Hinh Nguyen<br>
         Buttons go here
     </div>
 </div>
@@ -100,7 +100,8 @@
         createCamera();
         createLights();
         createGround();
-
+        createSun();
+        createMoon();
         animate();
     }
 
@@ -120,7 +121,7 @@
         camera.position.set(4, 20, 12);
 
         controls = new OrbitControls(camera, renderer.domElement);
-        controls.target.set(2, 4, 0);
+        controls.target.set(0, 3, 0);
         controls.update();
     }
 
@@ -134,6 +135,7 @@
         scene.add(new THREE.AmbientLight(0xffffff, 0.9));
     }
 
+    // ─── Ground ───────────────────────────────────────────────────────
     function createGround() {
         const geometry = new THREE.PlaneGeometry(20, 20, 40, 40);
 
@@ -148,7 +150,7 @@
                 uBiomes: { value: biomes }
             },
             vertexShader: groundVertexShader,
-            fragmentShader: groundFragmentShader,
+            //fragmentShader: groundFragmentShader,
         });
 
         const rectangle1 = new THREE.Mesh(geometry, material);
@@ -157,7 +159,6 @@
 
         scene.add(rectangle1);
     }
-
     const biomes = [
         { colorA: new THREE.Color(0x228b22), colorB: new THREE.Color(0x156315), lowestHeight: 0, highestHeight: 1 },
         { colorA: new THREE.Color(0x228b22), colorB: new THREE.Color(0x156315), lowestHeight: 0, highestHeight: 1 },
@@ -166,6 +167,29 @@
         { colorA: new THREE.Color(0x228b22), colorB: new THREE.Color(0x156315), lowestHeight: 0, highestHeight: 1 },
     ];
 
+
+    function createSun() {
+        const geometry = new THREE.SphereGeometry(1, 32, 32);
+        const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const sun = new THREE.Mesh(geometry, material);
+        sun.position.set(15, 10, 15);
+        scene.add(sun);
+
+        const sunLight = new THREE.PointLight(0xffffff, 1.5, 100);
+        sun.add(sunLight);
+    }
+
+    function createMoon() {
+        const geometry = new THREE.SphereGeometry(0.5, 32, 32);
+        const material = new THREE.MeshBasicMaterial({ color: 0xaaaaaa });
+        const moon = new THREE.Mesh(geometry, material);
+        moon.position.set(-15, -10, -15);
+        scene.add(moon);
+
+        const moonLight = new THREE.PointLight(0xcccccc, 0.5, 100);
+        moon.add(moonLight);
+    }
+    
     // language=Glsl
     const groundVertexShader = `
         /* glsl */
