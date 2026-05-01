@@ -71,6 +71,7 @@
 
 <script type="module">
     import * as THREE from 'three';
+    import { OrbitControls } from "https://unpkg.com/three@0.169.0/examples/jsm/controls/OrbitControls.js?module";
     import GUI from 'lil-gui';
 
     // WHAT TO DO
@@ -87,7 +88,7 @@
     // Where you should start is adding a second, differently scaled call to the snoise in the vertex shader,
     // and mapping that onto a biome. We'll pass the color and scale through to the fragment shader with varying.
 
-    let container, scene, camera, renderer;
+    let container, scene, camera, renderer, controls;
 
     // ─── Initialization ────────────────────────────────────────────────
     function init() {
@@ -118,7 +119,9 @@
         camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 200);
         camera.position.set(4, 20, 12);
 
-        camera.lookAt(0, 0, 0);
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(2, 4, 0);
+        controls.update();
     }
 
     // ─── Lights ────────────────────────────────────────────────────────
