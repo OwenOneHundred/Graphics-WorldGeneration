@@ -167,7 +167,6 @@
         { colorA: new THREE.Color(0x228b22), colorB: new THREE.Color(0x156315), lowestHeight: 0, highestHeight: 1 },
     ];
 
-
     function createSun() {
         const geometry = new THREE.SphereGeometry(1, 32, 32);
         const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
@@ -189,7 +188,7 @@
         const moonLight = new THREE.PointLight(0xcccccc, 0.5, 100);
         moon.add(moonLight);
     }
-    
+
     // language=Glsl
     const groundVertexShader = `
         /* glsl */
