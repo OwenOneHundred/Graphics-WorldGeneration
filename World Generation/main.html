@@ -79,13 +79,14 @@
     // ─── Scene Variables ───────────────────────────────────────────────
     let container, scene, camera, renderer, controls;
     let sunMesh;
+    let hemiLight;
     let gui;
 
     // Animation state
     let sunAngle = 0;
     let isSunAnimating = false;
     let sunSpeed = 0.005;
-    const sunRadius = 80;  // Orbit radius of the sun
+    const sunRadius = 15;  // Orbit radius of the sun
 
     // ─── Initialization ────────────────────────────────────────────────
     function init() {
@@ -104,6 +105,7 @@
         setupGUI();
 
         // Button Wiring
+        setupButtons();
 
         // Handle Resize
         window.addEventListener('resize', () => {
@@ -140,64 +142,107 @@
     // ─── Lights ────────────────────────────────────────────────────────
     function createLights() {
         // Hemisphere light: bright sky + green ground bounce — makes colors vivid
-        const hemi = new THREE.HemisphereLight(0xffffff, 0x446644, 1.2);
-        scene.add(hemi);
-
-        // Bright ambient so colors aren't muddy
-        scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+        hemiLight = new THREE.HemisphereLight(0xffffff, 0x446644, 0.5);
+        scene.add(hemiLight);
     }
 
     let groundShaderMaterial;
     // ─── Ground ───────────────────────────────────────────────────────
     function createGround() {
-        const geometry = new THREE.BoxGeometry( 20, 20, 5, 100, 100, 20 );
+        const groundGeometry = new THREE.BoxGeometry( 20, 20, 5, 100, 100, 20 );
 
         groundShaderMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 u_resolution:     { value: new THREE.Vector2(1000, 1000) },
                 u_time:        { value: 1.0 },
-                u_heightNoiseScale: { value: 0.25 },
-                u_colorNoiseScale: { value: 1.0 },
+                u_heightNoiseScale: { value: 1.0 },
+                u_colorNoiseScale: { value: 2.0 },
                 u_biomeNoiseScale: { value: 0.5 },
                 u_generalAmplitude: { value: 1.0 },
                 u_noisePosition: { value: 0 },
                 u_colorA: { value: new THREE.Vector3(0.2, 0.878, 0.02)},
                 u_colorB: { value: new THREE.Vector3(0.275, 0.639, 0.165)},
+                u_lightPos: { value: new THREE.Vector3() },
+                u_cameraPos: { value: new THREE.Vector3() },
+                u_lightColor: { value: new THREE.Color(0xffffff) },
+                u_ambientStrength: { value: 1.0 },
+                u_diffuseStrength: { value: 1.5 },
+                u_specularStrength: { value: 0.5 },
+                u_shininess: { value: 16.0 },
                 uBiomes: { value: biomes }
             },
             vertexShader: groundVertexShader,
             fragmentShader: groundFragmentShader,
         });
 
-        const rectangle1 = new THREE.Mesh(geometry, groundShaderMaterial);
+        const ground = new THREE.Mesh(groundGeometry, groundShaderMaterial);
 
-        geometry.rotateX(-Math.PI / 2);
+        groundGeometry.rotateX(-Math.PI / 2);
 
-        scene.add(rectangle1);
+        normalizeBiomeFrequencies();
+
+        scene.add(ground);
+
+        // Cover for the sides of the box
+        const dirtGeometry = new THREE.BoxGeometry(20.1, 2.0, 20.1);
+        const dirtMaterial = new THREE.MeshPhongMaterial({ color: 0xA65A2A });
+
+        const dirt = new THREE.Mesh(dirtGeometry, dirtMaterial);
+        dirt.position.y = 1.4;
+
+        ground.add(dirt);
+
+        const stoneGeometry = new THREE.BoxGeometry(20.1, 3.0, 20.1);
+        const stoneMaterial = new THREE.MeshPhongMaterial({ color: 0x9A9A9A });
+
+        const stone = new THREE.Mesh(stoneGeometry, stoneMaterial);
+        stone.position.y = -1.1;
+
+        ground.add(stone);
     }
 
     // ─── Biomes ───────────────────────────────────────────────────────
     const biomes = [
-        { colorA: new THREE.Color(0x68a346), colorB: new THREE.Color(0x66b03c), heightAmplitude: 1, heightScale: 0.1, colorScale: 1 }, // forest
-        { colorA: new THREE.Color(0x4584cc), colorB: new THREE.Color(0x2567b3), heightAmplitude: 1, heightScale: 0.0, colorScale: 1 }, // lake
-        { colorA: new THREE.Color(0x5ebd17), colorB: new THREE.Color(0x71d426), heightAmplitude: 1, heightScale: 0.01, colorScale: 1 }, // plains
-        { colorA: new THREE.Color(0x4cb5b5), colorB: new THREE.Color(0x4e9c9c), heightAmplitude: 2, heightScale: 0.1, colorScale: 1 }, // highlands
-        { colorA: new THREE.Color(0xace8f2), colorB: new THREE.Color(0xbfdbe0), heightAmplitude: 6, heightScale: 0.1, colorScale: 1 }, // mountain peaks
+        { colorA: new THREE.Color(0x68a346), colorB: new THREE.Color(0x66b03c), heightAmplitude: 1, heightScale: 0.1, colorScale: 1, frequency: 0.0 }, // forest
+        { colorA: new THREE.Color(0x4584cc), colorB: new THREE.Color(0x2567b3), heightAmplitude: 1, heightScale: 0.0, colorScale: 1, frequency: 0.0 }, // lake
+        { colorA: new THREE.Color(0x5ebd17), colorB: new THREE.Color(0x71d426), heightAmplitude: 1, heightScale: 0.01, colorScale: 1, frequency: 0.0 }, // plains
+        { colorA: new THREE.Color(0x4cb5b5), colorB: new THREE.Color(0x4e9c9c), heightAmplitude: 2, heightScale: 0.1, colorScale: 1, frequency: 0.0 }, // highlands
+        { colorA: new THREE.Color(0xace8f2), colorB: new THREE.Color(0xbfdbe0), heightAmplitude: 6, heightScale: 0.1, colorScale: 1, frequency: 0.0 }, // mountain peaks
     ];
+
+    // Temporary biome frequencies stored before normalization calculations
+    const biomeFrequencies = [
+        { value: 1.0 }, // forest
+        { value: 1.0 }, // lake
+        { value: 1.0 }, // plains
+        { value: 1.0 }, // highlands
+        { value: 1.0 }, // mountain peaks
+    ];
+
+    // Normalize biome frequencies so they sum to 1 before applying to main biomes array
+    // Connecting the buttons directly to the biomes array makes things go real weird so don't do it
+    function normalizeBiomeFrequencies() {
+        const total = biomeFrequencies.reduce((sum, biome) => sum + biome.value, 0);
+        biomes.forEach((biome, index) => {
+            biome.frequency = biomeFrequencies[index].value / total;
+        });
+        groundShaderMaterial.uniforms.uBiomes.needsUpdate = true;
+    }
 
     // ─── Sun ──────────────────────────────────────────────────────────
     function createSun() {
         const geometry = new THREE.SphereGeometry(1, 32, 32);
         const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-        const sun = new THREE.Mesh(geometry, material);
-        sun.position.set(15, 10, 15);
-        scene.add(sun);
+        sunMesh = new THREE.Mesh(geometry, material);
+        scene.add(sunMesh);
 
-        const sunLight = new THREE.PointLight(0xffffff, 1.5, 100);
-        sun.add(sunLight);
+        const sunLight = new THREE.PointLight(0xffffff, 500, 0);
+        sunMesh.add(sunLight);
     }
 
     // ─── Shaders ──────────────────────────────────────────────────────
+
+    // Helper functions
     // language=Glsl
     const voronoiImplementation = `
         vec2 random2( vec2 p ) {
@@ -303,6 +348,10 @@
         }
     `
 
+    // Main Shaders
+
+    // Vertex shader
+
     // language=Glsl
     const groundVertexShader = `
         /* glsl */
@@ -312,12 +361,12 @@
             float colorScale;
             float heightAmplitude;
             float heightScale;
+            float frequency;
         };
 
         uniform Biome uBiomes[5];
 
         varying vec3 vNormal;
-        varying vec3 vViewPosition;
         varying vec3 vWorldPosition;
 
         // ===========  NOISE  =============
@@ -333,10 +382,32 @@
 
         void main() {
             float valueFromVoronoi = voronoi(position.xz * u_biomeNoiseScale, u_time);
-            int biomeIndex = clamp(int(floor(valueFromVoronoi * 5.0)), 0, 4); // needs to change if Biome count ever increases
+
+            // New biome selection calculations go through the list of biomes and checks the current noise frequency to assign biomes
+            // Checks if the current noise value is less than the biome frequency
+            // Assigns biomeIndex to the current biome if it detects the correct biome
+            // Uses cumulative to go through the list of frequencies to check specific ranges
+            // Example: Forest = 0.1, Lake 0.2, Plains 0.3
+            // Current noise = 0.35
+            // 0.35 > 0.1, go to next biome
+            // Cumulative = 0 + 0.1
+            // 0.35 > 0.2 + 0.1, go to next biome
+            // Cumulative = 0.1 + 0.2
+            // 0.35 < 0.3 + 0.3, biomeIndex = 2 
+            // Can also be viewed as: (0, 0.1) = Forest, (0.1, 0.3) = Lake, (0.3, 0.6) = Plains
+            float cumulative = 0.0;
+            int biomeIndex = 0;
+            for (int i = 0; i < 5; i++) {
+                if (valueFromVoronoi < uBiomes[i].frequency + cumulative) {
+                    biomeIndex = i;
+                    break;
+                }
+                cumulative += uBiomes[i].frequency;
+            }
+
             Biome thisBiome = uBiomes[biomeIndex];
 
-            float heightNoise = snoise(position.xz * thisBiome.heightScale);
+            float heightNoise = snoise(position.xz * thisBiome.heightScale * u_heightNoiseScale);
             heightNoise *= thisBiome.heightAmplitude;
             heightNoise *= u_generalAmplitude;
             if (heightNoise < 0.0) {
@@ -346,17 +417,18 @@
             vec3 newPosition = position;
             newPosition.y += heightNoise * 1.0;
 
-            vec4 viewPos = modelViewMatrix * vec4(newPosition, 1.0);
-            vViewPosition = viewPos.xyz;
-            vNormal = normalize(normalMatrix * normal);
+            vNormal = normalize(mat3(modelMatrix) * normal);
 
-            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+            vec4 worldPosition = modelMatrix * vec4(newPosition, 1.0);
             vWorldPosition = worldPosition.xyz;
 
+            vec4 viewPos = modelViewMatrix * vec4(newPosition, 1.0);
             gl_Position = projectionMatrix * viewPos;
         }
       `;
 
+    // Fragment shader
+    
     // language=Glsl
     const groundFragmentShader = `
         /* glsl */
@@ -368,6 +440,7 @@
             float colorScale;
             float heightAmplitude;
             float heightScale;
+            float frequency;
         };
 
         uniform Biome uBiomes[5];
@@ -388,28 +461,54 @@
 
         ${voronoiImplementation}
 
-        // ===========  OTHERS  =============
+        // ===========  Shader Implementation  =============
 
-        // I'll implement this later
-        // uniform vec3 u_lightPos;
+        uniform vec3 u_lightPos;
+        uniform vec3 u_cameraPos;
+        uniform vec3 u_lightColor;
+        uniform float u_ambientStrength;
+        uniform float u_diffuseStrength;
+        uniform float u_specularStrength;
+        uniform float u_shininess;
 
-        // varying vec3 vNormal;
-        // varying vec3 vViewPosition;
+        varying vec3 vNormal;
 
         void main() {
-            // vec 3 normal = normalize(vNormal);
-            // vec3 lightDir = normalize(u_lightPos - vViewPosition);
-            // float diffuse = max(dot(normal, lightDir), 0.0);
+            vec3 normal = normalize(vNormal);
+
+            // --- Ambient ---
+            vec3 ambient = u_ambientStrength * u_lightColor;
+
+            // --- Diffuse ---
+            vec3 lightDir = normalize(u_lightPos - vWorldPosition);
+            float diff = max(dot(normal, lightDir), 0.0);
+            vec3 diffuse = diff * u_diffuseStrength * u_lightColor;
+
+            // --- Specular (Blinn-Phong) ---
+            vec3 viewDir = normalize(u_cameraPos - vWorldPosition);
+            vec3 halfDir = normalize(lightDir + viewDir);
+            float spec = pow(max(dot(normal, halfDir), 0.0), u_shininess);
+            vec3 specular = spec * u_specularStrength * u_lightColor;
 
             float valueFromVoronoi = voronoi(vWorldPosition.xz * u_biomeNoiseScale, u_time);
-            int biomeIndex = clamp(int(floor(valueFromVoronoi * 5.0)), 0, 4); // needs to change if Biome count ever increases
+
+            float cumulative = 0.0;
+            int biomeIndex = 0;
+            for (int i = 0; i < 5; i++) {
+                cumulative += uBiomes[i].frequency;
+                if (valueFromVoronoi < cumulative) {
+                    biomeIndex = i;
+                    break;
+                }
+            }
+
             Biome thisBiome = uBiomes[biomeIndex];
 
-            float value = voronoi(vWorldPosition.xz * thisBiome.colorScale, u_time);
-
+            float value = voronoi(vWorldPosition.xz * thisBiome.colorScale * u_colorNoiseScale, u_time);
             vec3 color = mix(thisBiome.colorA, thisBiome.colorB, value);
 
-            gl_FragColor = vec4(color, 1.0);
+            vec3 result = (ambient + diffuse + specular) * color;
+            gl_FragColor = vec4(result, 1.0);
         }
     `;
 
@@ -419,48 +518,49 @@
         
         // Sun controls
         const sunFolder = gui.addFolder('Sun Animation');
-        sunFolder.add({ speed: sunSpeed }, 'speed', 0.001, 0.05, 0.001)
+        sunFolder.add({ speed: sunSpeed }, 'speed', 0.001, 0.02, 0.001)
             .name('Rotation Speed')
             .onChange(value => sunSpeed = value);
         sunFolder.open();
 
-        // Ground controls
-        const groundFolder = gui.addFolder('Ground Controls');
-        groundFolder.add({ noise: 0.1 }, 'noise', 0.0, 1.0, 0.01)
-            .name('Noise Value')
-            .onChange(value => {
-                // Update noise
-            });
-        groundFolder.add(groundShaderMaterial.uniforms.u_generalAmplitude, 'value', 0.0, 2.0, 0.1)
+        // Noise controls
+        const noiseFolder = gui.addFolder('Noise Controls');
+        noiseFolder.add(groundShaderMaterial.uniforms.u_biomeNoiseScale, 'value', 0.0, 2.0, 0.05)
+            .name('Biome Noise Scale');
+        noiseFolder.add(groundShaderMaterial.uniforms.u_colorNoiseScale, 'value', 0.0, 4.0, 0.05)
+            .name('Color Noise Scale');
+        noiseFolder.add(groundShaderMaterial.uniforms.u_heightNoiseScale, 'value', 0.0, 3.0, 0.05)
+            .name('Height Noise Scale');
+        noiseFolder.add(groundShaderMaterial.uniforms.u_generalAmplitude, 'value', 0.0, 2.0, 0.05)
             .name('Terrain Amplitude');
-        groundFolder.open();
+        noiseFolder.open();
 
         // Biome controls
         const biomeFolder = gui.addFolder('Biome Controls');
-        biomeFolder.add({ grassFreq: 1.0 }, 'grassFreq', 0.0, 1.0, 0.01)
-            .name('Grass Frequency')
+        biomeFolder.add(biomeFrequencies[0], 'value', 0.0, 1.0, 0.05)
+            .name('Forest Frequency')
             .onChange(value => {
-                // Update grass frequency
+                normalizeBiomeFrequencies();
             });
-        biomeFolder.add({ snowFreq: 1.0 }, 'snowFreq', 0.0, 1.0, 0.01)
-            .name('Snow Frequency')
+        biomeFolder.add(biomeFrequencies[1], 'value', 0.0, 1.0, 0.05)
+            .name('Lake Frequency')
             .onChange(value => {
-                // Update snow frequency
+                normalizeBiomeFrequencies();
             });
-        biomeFolder.add({ sandFreq: 1.0 }, 'sandFreq', 0.0, 1.0, 0.01)
-            .name('Sand Frequency')
+        biomeFolder.add(biomeFrequencies[2], 'value', 0.0, 1.0, 0.05)
+            .name('Plains Frequency')
             .onChange(value => {
-                // Update sand frequency
+                normalizeBiomeFrequencies();
             });
-        biomeFolder.add({ biome4Freq: 1.0 }, 'biome4Freq', 0.0, 1.0, 0.01)
-            .name('Biome 4 Frequency')
+        biomeFolder.add(biomeFrequencies[3], 'value', 0.0, 1.0, 0.05)
+            .name('Highlands Frequency')
             .onChange(value => {
-                // Update biome 4 frequency
+                normalizeBiomeFrequencies();
             });
-        biomeFolder.add({ biome5Freq: 1.0 }, 'biome5Freq', 0.0, 1.0, 0.01)
-            .name('Biome 5 Frequency')
+        biomeFolder.add(biomeFrequencies[4], 'value', 0.0, 1.0, 0.05)
+            .name('Mountain Frequency')
             .onChange(value => {
-                // Update biome 5 frequency
+                normalizeBiomeFrequencies();
             });
         biomeFolder.open();
 
@@ -469,16 +569,64 @@
 
     // ─── Button Wiring ────────────────────────────────────────────────────
 
+    function setupButtons() {
+        const btnSun = document.getElementById('btnToggleSun');
+        btnSun.addEventListener('click', () => {
+            isSunAnimating = !isSunAnimating;
+            btnSun.textContent = isSunAnimating ? 'Stop Sun' : 'Start Sun';
+            btnSun.classList.toggle('active', isSunAnimating);
+        });
+
+        const btnReset = document.getElementById('btnReset');
+        btnReset.addEventListener('click', () => {
+            // Reset sun animation
+            isSunAnimating = false;
+            sunAngle = 0;
+            btnSun.textContent = 'Start Sun';
+            btnSun.classList.remove('active');
+            sunSpeed = 0.005;
+
+            // Reset ground controls
+            groundShaderMaterial.uniforms.u_biomeNoiseScale.value = 0.5;
+            groundShaderMaterial.uniforms.u_colorNoiseScale.value = 2.0;
+            groundShaderMaterial.uniforms.u_heightNoiseScale.value = 1.0;
+            groundShaderMaterial.uniforms.u_generalAmplitude.value = 1.0;
+
+            // Reset biome controls
+            biomeFrequencies.forEach(biome => biome.value = 1.0);
+            normalizeBiomeFrequencies();
+
+            // Recreate GUI to reset sliders on buttons
+            gui.destroy();
+            setupGUI();
+        });
+    }
+
     // ─── Animation Loop ────────────────────────────────────────────────────
     function animate() {
         requestAnimationFrame(animate);
 
         // Animations here
 
-        // Future light implementation
-        // objects.forEach(obj => {
-        //     obj.material.uniforms.u_lightPos.value.copy(sunPos);
-        // })
+        // Sun animation
+        if (isSunAnimating){
+            sunAngle += sunSpeed;
+        }
+
+        const sunX = sunRadius * -Math.cos(sunAngle);
+        const sunZ = sunRadius * -Math.sin(sunAngle);
+        const sunY = 5 + 10 * Math.sin(sunAngle);
+        const sunWorldPos = new THREE.Vector3(sunX, sunY, sunZ);
+        const sunViewPos = sunWorldPos.clone().applyMatrix4(camera.matrixWorldInverse)
+
+        sunMesh.position.set(sunX, sunY, sunZ);
+
+        groundShaderMaterial.uniforms.u_ambientStrength.value = 0.5 + 0.1 * Math.sin(sunAngle);
+        hemiLight.intensity = 0.8 + 0.6 * Math.sin(sunAngle);
+
+        // Copy
+        groundShaderMaterial.uniforms.u_lightPos.value.copy(sunMesh.position);
+        groundShaderMaterial.uniforms.u_cameraPos.value.copy(camera.position);
 
         // Update functions, keep at the end
         controls.update();
