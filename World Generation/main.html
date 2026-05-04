@@ -249,7 +249,7 @@
             return fract(sin(vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3))))*43758.5453);
         }
 
-        float voronoi(vec2 coords, float u_time) {
+        vec4 voronoi(vec2 coords, float u_time) {
             vec2 st = coords;
             vec3 color = vec3(.0);
 
@@ -258,7 +258,10 @@
             vec2 f_st = fract(st);
 
             float m_dist = 10.;  // minimum distance
-            vec2 m_point;        // minimum point
+            vec2 m_point = vec2(0.0, 0.0);        // minimum point
+
+            float sec_dist = 20.0;
+            vec2 sec_point = vec2(0.0, 0.0);
 
             for (int j=-1; j<=1; j++ ) {
                 for (int i=-1; i<=1; i++ ) {
@@ -269,17 +272,24 @@
                     float dist = length(diff);
 
                     if( dist < m_dist ) {
+                        sec_dist = m_dist;
+                        sec_point = m_point;
+
                         m_dist = dist;
                         m_point = point;
+                    }
+                    else if (dist < sec_dist) {
+                        sec_dist = dist;
+                        sec_point = point;
                     }
                 }
             }
 
-            // Assign a color using the closest point position
-            //float value = dot(m_point,vec2(.3,.6));
+            float closest = fract(dot(m_point, vec2(.3, .6)));
+            float secondClosest = fract(dot(sec_point, vec2(.3, .6)));
 
             // 0 to 1 value
-            return fract(dot(m_point, vec2(.3, .6)));
+            return vec4(closest, secondClosest, m_dist, sec_dist);
         }
     `
 
@@ -381,7 +391,9 @@
         ${voronoiImplementation}
 
         void main() {
-            float valueFromVoronoi = voronoi((position.xz + u_noisePosition) * u_biomeNoiseScale, u_time);
+            // voronoi return value:
+            // closest index, second closest index, closest index distance, second closest index distance
+            vec4 valuesFromVoronoi = voronoi((position.xz + u_noisePosition) * u_biomeNoiseScale, u_time);
 
             // New biome selection calculations go through the list of biomes and checks the current noise frequency to assign biomes
             // Checks if the current noise value is less than the biome frequency
@@ -398,7 +410,7 @@
             float cumulative = 0.0;
             int biomeIndex = 0;
             for (int i = 0; i < 5; i++) {
-                if (valueFromVoronoi < uBiomes[i].frequency + cumulative) {
+                if (valuesFromVoronoi.x < uBiomes[i].frequency + cumulative) {
                     biomeIndex = i;
                     break;
                 }
@@ -489,22 +501,56 @@
             float spec = pow(max(dot(normal, halfDir), 0.0), u_shininess);
             vec3 specular = spec * u_specularStrength * u_lightColor;
 
-            float valueFromVoronoi = voronoi((vWorldPosition.xz + u_noisePosition) * u_biomeNoiseScale, u_time);
+            // voronoi return value:
+            // closest index, second closest index, closest index distance, second closest index distance
+            vec4 valueFromVoronoi = voronoi((vWorldPosition.xz + u_noisePosition) * u_biomeNoiseScale, u_time);
 
             float cumulative = 0.0;
             int biomeIndex = 0;
             for (int i = 0; i < 5; i++) {
-                if (valueFromVoronoi < uBiomes[i].frequency + cumulative) {
+                if (valueFromVoronoi.x < uBiomes[i].frequency + cumulative) {
                     biomeIndex = i;
                     break;
                 }
                 cumulative += uBiomes[i].frequency;
             }
 
-            Biome thisBiome = uBiomes[biomeIndex];
+            float cumulative2 = 0.0;
+            int biomeIndex2 = 0;
+            for (int j = 0; j < 5; j++) {
+                if (valueFromVoronoi.y < uBiomes[j].frequency + cumulative2) {
+                    biomeIndex2 = j;
+                    break;
+                }
+                cumulative2 += uBiomes[j].frequency;
+            }
 
-            float value = voronoi(vWorldPosition.xz * thisBiome.colorScale * u_colorNoiseScale, u_time);
-            vec3 color = mix(thisBiome.colorA, thisBiome.colorB, value);
+            Biome b1 = uBiomes[biomeIndex];
+            Biome b2 = uBiomes[biomeIndex2];
+
+            vec4 patternVoronoi = voronoi(vWorldPosition.xz * b1.colorScale * u_colorNoiseScale, u_time);
+
+            vec4 v = valueFromVoronoi;
+            int biomeAID = int(v.x * 5.0);
+            int biomeBID = int(v.y * 5.0); // 5 here is the total biome count
+
+            bool flipped = false;
+            if (biomeAID > biomeBID)
+            {
+                flipped = true;
+            }
+            int first = flipped ? biomeBID : biomeAID;
+            int second = flipped ? biomeAID : biomeBID;
+
+            float distDiff = v.w - v.z;
+
+            float t = smoothstep(0.0, 3.0, distDiff);
+            float biomeMix = flipped ? (1.0 - t) : t;
+
+            vec3 colorInB1 = mix(b1.colorA, b1.colorB, patternVoronoi.x);
+            vec3 colorInB2 = mix(b2.colorA, b2.colorB, patternVoronoi.x);
+
+            vec3 color = mix(colorInB2, colorInB1, biomeMix);
 
             vec3 result = (ambient + diffuse + specular) * color;
             gl_FragColor = vec4(result, 1.0);
