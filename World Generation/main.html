@@ -149,27 +149,27 @@
     let groundShaderMaterial;
     // ─── Ground ───────────────────────────────────────────────────────
     function createGround() {
-        const groundGeometry = new THREE.BoxGeometry( 20, 20, 5, 100, 100, 20 );
+        const groundGeometry = new THREE.BoxGeometry( 20, 20, 5, 100, 100, 1 );
 
         groundShaderMaterial = new THREE.ShaderMaterial({
             uniforms: {
-                u_resolution:     { value: new THREE.Vector2(1000, 1000) },
-                u_time:        { value: 1.0 },
-                u_heightNoiseScale: { value: 1.0 },
-                u_colorNoiseScale: { value: 2.0 },
-                u_biomeNoiseScale: { value: 0.5 },
-                u_generalAmplitude: { value: 1.0 },
-                u_noisePosition: { value: 0 },
-                u_colorA: { value: new THREE.Vector3(0.2, 0.878, 0.02)},
-                u_colorB: { value: new THREE.Vector3(0.275, 0.639, 0.165)},
-                u_lightPos: { value: new THREE.Vector3() },
-                u_cameraPos: { value: new THREE.Vector3() },
-                u_lightColor: { value: new THREE.Color(0xffffff) },
-                u_ambientStrength: { value: 1.0 },
-                u_diffuseStrength: { value: 1.5 },
-                u_specularStrength: { value: 0.5 },
-                u_shininess: { value: 16.0 },
-                uBiomes: { value: biomes }
+                u_resolution:        { value: new THREE.Vector2(1000, 1000) },
+                u_time:              { value: 1.0 },
+                u_heightNoiseScale:  { value: 1.0 },
+                u_colorNoiseScale:   { value: 2.0 },
+                u_biomeNoiseScale:   { value: 0.5 },
+                u_generalAmplitude:  { value: 1.0 },
+                u_noisePosition:     { value: 0 },
+                u_colorA:            { value: new THREE.Vector3(0.2, 0.878, 0.02)},
+                u_colorB:            { value: new THREE.Vector3(0.275, 0.639, 0.165)},
+                u_lightPos:          { value: new THREE.Vector3() },
+                u_cameraPos:         { value: new THREE.Vector3() },
+                u_lightColor:        { value: new THREE.Color(0xffffff) },
+                u_ambientStrength:   { value: 0.0 },
+                u_diffuseStrength:   { value: 1.75 },
+                u_specularStrength:  { value: 0.5 },
+                u_shininess:         { value: 16.0 },
+                uBiomes:             { value: biomes },
             },
             vertexShader: groundVertexShader,
             fragmentShader: groundFragmentShader,
@@ -203,11 +203,11 @@
 
     // ─── Biomes ───────────────────────────────────────────────────────
     const biomes = [
-        { colorA: new THREE.Color(0x68a346), colorB: new THREE.Color(0x66b03c), heightAmplitude: 1, heightScale: 0.1, colorScale: 1, frequency: 0.0 }, // forest
-        { colorA: new THREE.Color(0x4584cc), colorB: new THREE.Color(0x2567b3), heightAmplitude: 1, heightScale: 0.0, colorScale: 1, frequency: 0.0 }, // lake
+        { colorA: new THREE.Color(0x68a346), colorB: new THREE.Color(0x66b03c), heightAmplitude: 1, heightScale: 0.1, colorScale: 1, frequency: 0.0 },  // forest
+        { colorA: new THREE.Color(0x4584cc), colorB: new THREE.Color(0x2567b3), heightAmplitude: 1, heightScale: 0.0, colorScale: 1, frequency: 0.0 },  // lake
         { colorA: new THREE.Color(0x5ebd17), colorB: new THREE.Color(0x71d426), heightAmplitude: 1, heightScale: 0.01, colorScale: 1, frequency: 0.0 }, // plains
-        { colorA: new THREE.Color(0x4cb5b5), colorB: new THREE.Color(0x4e9c9c), heightAmplitude: 2, heightScale: 0.1, colorScale: 1, frequency: 0.0 }, // highlands
-        { colorA: new THREE.Color(0xace8f2), colorB: new THREE.Color(0xbfdbe0), heightAmplitude: 6, heightScale: 0.1, colorScale: 1, frequency: 0.0 }, // mountain peaks
+        { colorA: new THREE.Color(0x4cb5b5), colorB: new THREE.Color(0x4e9c9c), heightAmplitude: 2, heightScale: 0.1, colorScale: 1, frequency: 0.0 },  // highlands
+        { colorA: new THREE.Color(0xace8f2), colorB: new THREE.Color(0xbfdbe0), heightAmplitude: 6, heightScale: 0.1, colorScale: 1, frequency: 0.0 },  // mountain peaks
     ];
 
     // Temporary biome frequencies stored before normalization calculations
@@ -495,12 +495,13 @@
             float cumulative = 0.0;
             int biomeIndex = 0;
             for (int i = 0; i < 5; i++) {
-                cumulative += uBiomes[i].frequency;
-                if (valueFromVoronoi < cumulative) {
+                if (valueFromVoronoi < uBiomes[i].frequency + cumulative) {
                     biomeIndex = i;
                     break;
                 }
+                cumulative += uBiomes[i].frequency;
             }
+                
 
             Biome thisBiome = uBiomes[biomeIndex];
 
@@ -525,9 +526,9 @@
 
         // Noise controls
         const noiseFolder = gui.addFolder('Noise Controls');
-        noiseFolder.add(groundShaderMaterial.uniforms.u_biomeNoiseScale, 'value', 0.0, 2.0, 0.05)
+        noiseFolder.add(groundShaderMaterial.uniforms.u_biomeNoiseScale, 'value', 0.1, 2.0, 0.05)
             .name('Biome Noise Scale');
-        noiseFolder.add(groundShaderMaterial.uniforms.u_colorNoiseScale, 'value', 0.0, 4.0, 0.05)
+        noiseFolder.add(groundShaderMaterial.uniforms.u_colorNoiseScale, 'value', 0.2, 4.0, 0.05)
             .name('Color Noise Scale');
         noiseFolder.add(groundShaderMaterial.uniforms.u_heightNoiseScale, 'value', 0.0, 3.0, 0.05)
             .name('Height Noise Scale');
@@ -535,34 +536,34 @@
             .name('Terrain Amplitude');
         noiseFolder.open();
 
-        // Biome controls
-        const biomeFolder = gui.addFolder('Biome Controls');
-        biomeFolder.add(biomeFrequencies[0], 'value', 0.0, 1.0, 0.05)
+        // Frequency controls
+        const frequencyFolder = gui.addFolder('Frequency Controls');
+        frequencyFolder.add(biomeFrequencies[0], 'value', 0.0, 1.0, 0.05)
             .name('Forest Frequency')
             .onChange(value => {
                 normalizeBiomeFrequencies();
             });
-        biomeFolder.add(biomeFrequencies[1], 'value', 0.0, 1.0, 0.05)
+        frequencyFolder.add(biomeFrequencies[1], 'value', 0.0, 1.0, 0.05)
             .name('Lake Frequency')
             .onChange(value => {
                 normalizeBiomeFrequencies();
             });
-        biomeFolder.add(biomeFrequencies[2], 'value', 0.0, 1.0, 0.05)
+        frequencyFolder.add(biomeFrequencies[2], 'value', 0.0, 1.0, 0.05)
             .name('Plains Frequency')
             .onChange(value => {
                 normalizeBiomeFrequencies();
             });
-        biomeFolder.add(biomeFrequencies[3], 'value', 0.0, 1.0, 0.05)
+        frequencyFolder.add(biomeFrequencies[3], 'value', 0.0, 1.0, 0.05)
             .name('Highlands Frequency')
             .onChange(value => {
                 normalizeBiomeFrequencies();
             });
-        biomeFolder.add(biomeFrequencies[4], 'value', 0.0, 1.0, 0.05)
+        frequencyFolder.add(biomeFrequencies[4], 'value', 0.0, 1.0, 0.05)
             .name('Mountain Frequency')
             .onChange(value => {
                 normalizeBiomeFrequencies();
             });
-        biomeFolder.open();
+        frequencyFolder.open();
 
         // Water controls?
     }
@@ -621,7 +622,7 @@
 
         sunMesh.position.set(sunX, sunY, sunZ);
 
-        groundShaderMaterial.uniforms.u_ambientStrength.value = 0.5 + 0.1 * Math.sin(sunAngle);
+        groundShaderMaterial.uniforms.u_ambientStrength.value = 0.35 + 0.1 * Math.sin(sunAngle);
         hemiLight.intensity = 0.8 + 0.6 * Math.sin(sunAngle);
 
         // Copy
