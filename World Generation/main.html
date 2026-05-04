@@ -369,19 +369,19 @@
         varying vec3 vNormal;
         varying vec3 vWorldPosition;
 
-        // ===========  NOISE  =============
         uniform vec2 u_resolution;
         uniform float u_colorNoiseScale;
         uniform float u_heightNoiseScale;
         uniform float u_biomeNoiseScale;
         uniform float u_generalAmplitude;
         uniform float u_time;
+        uniform float u_noisePosition;
 
         ${noiseImplementation}
         ${voronoiImplementation}
 
         void main() {
-            float valueFromVoronoi = voronoi(position.xz * u_biomeNoiseScale, u_time);
+            float valueFromVoronoi = voronoi((position.xz + u_noisePosition) * u_biomeNoiseScale, u_time);
 
             // New biome selection calculations go through the list of biomes and checks the current noise frequency to assign biomes
             // Checks if the current noise value is less than the biome frequency
@@ -461,8 +461,6 @@
 
         ${voronoiImplementation}
 
-        // ===========  Shader Implementation  =============
-
         uniform vec3 u_lightPos;
         uniform vec3 u_cameraPos;
         uniform vec3 u_lightColor;
@@ -470,6 +468,7 @@
         uniform float u_diffuseStrength;
         uniform float u_specularStrength;
         uniform float u_shininess;
+        uniform float u_noisePosition;
 
         varying vec3 vNormal;
 
@@ -490,7 +489,7 @@
             float spec = pow(max(dot(normal, halfDir), 0.0), u_shininess);
             vec3 specular = spec * u_specularStrength * u_lightColor;
 
-            float valueFromVoronoi = voronoi(vWorldPosition.xz * u_biomeNoiseScale, u_time);
+            float valueFromVoronoi = voronoi((vWorldPosition.xz + u_noisePosition) * u_biomeNoiseScale, u_time);
 
             float cumulative = 0.0;
             int biomeIndex = 0;
@@ -501,7 +500,6 @@
                 }
                 cumulative += uBiomes[i].frequency;
             }
-                
 
             Biome thisBiome = uBiomes[biomeIndex];
 
@@ -534,6 +532,8 @@
             .name('Height Noise Scale');
         noiseFolder.add(groundShaderMaterial.uniforms.u_generalAmplitude, 'value', 0.0, 2.0, 0.05)
             .name('Terrain Amplitude');
+        noiseFolder.add(groundShaderMaterial.uniforms.u_noisePosition, 'value', 0.0, 100.0, 0.5)
+            .name('Noise Position');
         noiseFolder.open();
 
         // Frequency controls
