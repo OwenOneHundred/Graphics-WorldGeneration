@@ -67,7 +67,12 @@
         Owen Kabrhel and Thai Hinh Nguyen<br><br>
         <button id="btnToggleSun">Start Sun</button>
         <button id="btnReset">Reset</button><br>
+        <button id="btnDawn">Dawn</button>
+        <button id="btnDay">Day</button>
+        <button id="btnDusk">Dusk</button>
+        <button id="btnNight">Night</button><br>
         <div id="gui-container"></div>
+        <div>Reset doesn't reset custom settings.<br>Requires page reload.</div>
     </div>
 </div>
 
@@ -129,6 +134,7 @@
 
     // ─── Camera + Controls ─────────────────────────────────────────────
     function createCamera() {
+        // Camera settings
         const aspect = container.clientWidth / container.clientHeight;
         camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 200);
         camera.position.set(12, 15, 20);
@@ -142,6 +148,7 @@
     // ─── Lights ────────────────────────────────────────────────────────
     function createLights() {
         // Hemisphere light: bright sky + green ground bounce — makes colors vivid
+        // Hemisphere light is used instead of ambient light because it looks better
         hemiLight = new THREE.HemisphereLight(0xffffff, 0x446644, 0.5);
         scene.add(hemiLight);
     }
@@ -149,14 +156,14 @@
     let groundShaderMaterial;
     // ─── Ground ───────────────────────────────────────────────────────
     function createGround() {
-        const groundGeometry = new THREE.BoxGeometry( 20, 20, 5, 100, 100, 1 );
+        const groundGeometry = new THREE.BoxGeometry( 20, 20, 5, 200, 200, 1 );
 
         groundShaderMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 u_resolution:        { value: new THREE.Vector2(1000, 1000) },
                 u_time:              { value: 1.0 },
                 u_heightNoiseScale:  { value: 1.0 },
-                u_colorNoiseScale:   { value: 2.0 },
+                u_colorNoiseScale:   { value: 1.0 },
                 u_biomeNoiseScale:   { value: 0.5 },
                 u_generalAmplitude:  { value: 1.0 },
                 u_noisePosition:     { value: 0 },
@@ -184,6 +191,7 @@
         scene.add(ground);
 
         // Cover for the sides of the box
+        // Dirt layer
         const dirtGeometry = new THREE.BoxGeometry(20.1, 2.0, 20.1);
         const dirtMaterial = new THREE.MeshPhongMaterial({ color: 0xA65A2A });
 
@@ -192,6 +200,7 @@
 
         ground.add(dirt);
 
+        // Stone layer
         const stoneGeometry = new THREE.BoxGeometry(20.1, 3.0, 20.1);
         const stoneMaterial = new THREE.MeshPhongMaterial({ color: 0x9A9A9A });
 
@@ -231,11 +240,13 @@
 
     // ─── Sun ──────────────────────────────────────────────────────────
     function createSun() {
-        const geometry = new THREE.SphereGeometry(1, 32, 32);
+        // Sun mesh
+        const geometry = new THREE.SphereGeometry(1, 16, 16);
         const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
         sunMesh = new THREE.Mesh(geometry, material);
         scene.add(sunMesh);
 
+        // Sun light
         const sunLight = new THREE.PointLight(0xffffff, 500, 0);
         sunMesh.add(sunLight);
     }
@@ -419,7 +430,7 @@
 
             Biome thisBiome = uBiomes[biomeIndex];
 
-            float heightNoise = snoise(position.xz * thisBiome.heightScale * u_heightNoiseScale);
+            float heightNoise = snoise((position.xz + u_noisePosition) * thisBiome.heightScale * u_heightNoiseScale);
             heightNoise *= thisBiome.heightAmplitude;
             heightNoise *= u_generalAmplitude;
             if (heightNoise < 0.0) {
@@ -472,6 +483,8 @@
         uniform vec3 u_colorB;
 
         ${voronoiImplementation}
+
+        // ==========  LIGHTING  =============
 
         uniform vec3 u_lightPos;
         uniform vec3 u_cameraPos;
@@ -531,26 +544,26 @@
             vec4 patternVoronoi = voronoi(vWorldPosition.xz * b1.colorScale * u_colorNoiseScale, u_time);
 
             vec4 v = valueFromVoronoi;
-            int biomeAID = int(v.x * 5.0);
-            int biomeBID = int(v.y * 5.0); // 5 here is the total biome count
+            int firstBiomeID = int(v.x * 5.0);
+            int secondBiomeID = int(v.y * 5.0); // 5 here is the total biome count
 
             bool flipped = false;
-            if (biomeAID > biomeBID)
+            if (firstBiomeID > secondBiomeID)
             {
                 flipped = true;
             }
-            int first = flipped ? biomeBID : biomeAID;
-            int second = flipped ? biomeAID : biomeBID;
+            int first = flipped ? secondBiomeID : firstBiomeID;
+            int second = flipped ? firstBiomeID : secondBiomeID;
 
             float distDiff = v.w - v.z;
 
             float t = smoothstep(0.0, 3.0, distDiff);
             float biomeMix = flipped ? (1.0 - t) : t;
 
-            vec3 colorInB1 = mix(b1.colorA, b1.colorB, patternVoronoi.x);
-            vec3 colorInB2 = mix(b2.colorA, b2.colorB, patternVoronoi.x);
+            vec3 b1Color = mix(b1.colorA, b1.colorB, patternVoronoi.x);
+            vec3 b2Color = mix(b2.colorA, b2.colorB, patternVoronoi.x);
 
-            vec3 color = mix(colorInB2, colorInB1, biomeMix);
+            vec3 color = mix(b2Color, b1Color, biomeMix);
 
             vec3 result = (ambient + diffuse + specular) * color;
             gl_FragColor = vec4(result, 1.0);
@@ -563,7 +576,7 @@
         
         // Sun controls
         const sunFolder = gui.addFolder('Sun Animation');
-        sunFolder.add({ speed: sunSpeed }, 'speed', 0.001, 0.02, 0.001)
+        sunFolder.add({ speed: sunSpeed }, 'speed', 0.001, 0.05, 0.001)
             .name('Rotation Speed')
             .onChange(value => sunSpeed = value);
         sunFolder.open();
@@ -574,11 +587,11 @@
             .name('Biome Noise Scale');
         noiseFolder.add(groundShaderMaterial.uniforms.u_colorNoiseScale, 'value', 0.2, 4.0, 0.05)
             .name('Color Noise Scale');
-        noiseFolder.add(groundShaderMaterial.uniforms.u_heightNoiseScale, 'value', 0.0, 3.0, 0.05)
+        noiseFolder.add(groundShaderMaterial.uniforms.u_heightNoiseScale, 'value', 0.0, 4.0, 0.05)
             .name('Height Noise Scale');
         noiseFolder.add(groundShaderMaterial.uniforms.u_generalAmplitude, 'value', 0.0, 2.0, 0.05)
             .name('Terrain Amplitude');
-        noiseFolder.add(groundShaderMaterial.uniforms.u_noisePosition, 'value', 0.0, 100.0, 0.5)
+        noiseFolder.add(groundShaderMaterial.uniforms.u_noisePosition, 'value', -100.0, 100.0, 0.5)
             .name('Noise Position');
         noiseFolder.open();
 
@@ -611,12 +624,40 @@
             });
         frequencyFolder.open();
 
-        // Water controls?
+        // Custom Biome Controls
+        const customFolder = gui.addFolder('Custom Biome Settings');
+        const customColorFolder = customFolder.addFolder('Biome Colors');
+        // Setup biome color settings for each biome
+        biomes.forEach((biome, index) => {
+            customColorFolder.addColor({ color: '#' + biome.colorA.getHexString() }, 'color')
+                .name(`Biome ${index + 1} Color A`)
+                .onChange(value => {
+                    biome.colorA.set(value);
+                    groundShaderMaterial.uniforms.uBiomes.needsUpdate = true;
+                });
+            customColorFolder.addColor({ color: '#' + biome.colorB.getHexString() }, 'color')
+                .name(`Biome ${index + 1} Color B`)
+                .onChange(value => {
+                    biome.colorB.set(value);
+                    groundShaderMaterial.uniforms.uBiomes.needsUpdate = true;
+                });
+        });
+        // Setup biome height settings for each biome
+        const customHeightFolder = customFolder.addFolder('Biome Height Settings');
+        biomes.forEach((biome, index) => {
+            customHeightFolder.add(biome, 'heightAmplitude', 1.0, 6.0, 0.1)
+                .name(`Biome ${index + 1} Height Amp`);
+        });
+        // Keep custom folders closed by default due to being less important and also a lot of sliders
+        customFolder.close();
+        customColorFolder.close();
+        customHeightFolder.close();
     }
 
     // ─── Button Wiring ────────────────────────────────────────────────────
 
     function setupButtons() {
+        // Sun animation toggle
         const btnSun = document.getElementById('btnToggleSun');
         btnSun.addEventListener('click', () => {
             isSunAnimating = !isSunAnimating;
@@ -624,28 +665,55 @@
             btnSun.classList.toggle('active', isSunAnimating);
         });
 
+        // Reset button
         const btnReset = document.getElementById('btnReset');
         btnReset.addEventListener('click', () => {
-            // Reset sun animation
+            // Reset camera
+            camera.position.set(12, 15, 20);
+            controls.target.set(0, 5, 0);
+
+            // Reset sun folder
             isSunAnimating = false;
             sunAngle = 0;
             btnSun.textContent = 'Start Sun';
             btnSun.classList.remove('active');
             sunSpeed = 0.005;
 
-            // Reset ground controls
+            // Reset noise folder
             groundShaderMaterial.uniforms.u_biomeNoiseScale.value = 0.5;
-            groundShaderMaterial.uniforms.u_colorNoiseScale.value = 2.0;
+            groundShaderMaterial.uniforms.u_colorNoiseScale.value = 1.0;
             groundShaderMaterial.uniforms.u_heightNoiseScale.value = 1.0;
             groundShaderMaterial.uniforms.u_generalAmplitude.value = 1.0;
+            groundShaderMaterial.uniforms.u_noisePosition.value = 0.0;
 
-            // Reset biome controls
+            // Reset frequency folder
             biomeFrequencies.forEach(biome => biome.value = 1.0);
             normalizeBiomeFrequencies();
+
+            // Reset custom biome settings
+            scene.remove(biomes);
 
             // Recreate GUI to reset sliders on buttons
             gui.destroy();
             setupGUI();
+        });
+
+        // Sun position buttons
+        const btnDawn = document.getElementById('btnDawn');
+        btnDawn.addEventListener('click', () => {
+            sunAngle = 0;
+        });
+        const btnDay = document.getElementById('btnDay');
+        btnDay.addEventListener('click', () => {
+            sunAngle = Math.PI / 2;
+        });
+        const btnDusk = document.getElementById('btnDusk');
+        btnDusk.addEventListener('click', () => {
+            sunAngle = Math.PI;
+        });
+        const btnNight = document.getElementById('btnNight');
+        btnNight.addEventListener('click', () => {
+            sunAngle = Math.PI * 1.5;
         });
     }
 
@@ -654,7 +722,6 @@
         requestAnimationFrame(animate);
 
         // Animations here
-
         // Sun animation
         if (isSunAnimating){
             sunAngle += sunSpeed;
@@ -667,7 +734,8 @@
         const sunViewPos = sunWorldPos.clone().applyMatrix4(camera.matrixWorldInverse)
 
         sunMesh.position.set(sunX, sunY, sunZ);
-
+        
+        // Change ambient light strength based on sun position
         groundShaderMaterial.uniforms.u_ambientStrength.value = 0.35 + 0.1 * Math.sin(sunAngle);
         hemiLight.intensity = 0.8 + 0.6 * Math.sin(sunAngle);
 
